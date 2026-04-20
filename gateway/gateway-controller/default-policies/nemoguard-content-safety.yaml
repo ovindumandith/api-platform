@@ -1,0 +1,136 @@
+name: nemoguard-content-safety
+version: v1.0.0
+displayName: NeMo Guard Content Safety
+description: |
+  Validates request and/or response content using NVIDIA NeMo Guard 8B
+  Content Safety. Request bodies are checked before they reach the upstream
+  LLM; response bodies are checked before they are delivered to the client.
+  Unsafe requests are rejected with a configurable status code; unsafe
+  responses are replaced with a sanitised error message.
+
+  NeMo Guard classifies content into eight safety categories:
+    S1 Violence, S2 Sexual content, S3 Criminal planning,
+    S4 Guns/Weapons, S5 Regulated substances, S6 Suicide/Self-harm,
+    S7 Hate/Discriminatory, S8 Terrorism.
+
+parameters:
+  type: object
+  additionalProperties: false
+  properties:
+    request:
+      type: object
+      x-wso2-policy-advanced-param: false
+      description: Configuration for request-phase content safety checks.
+      properties:
+        enabled:
+          type: boolean
+          x-wso2-policy-advanced-param: false
+          description: |
+            Enables content safety checks on incoming requests.
+          default: true
+        jsonPath:
+          type: string
+          x-wso2-policy-advanced-param: false
+          description: |
+            JSONPath expression used to extract the user message from the
+            request body. Applies to JSON payloads only; non-JSON bodies are
+            passed through unchanged.
+          default: "$.messages[-1].content"
+        blockStatusCode:
+          type: integer
+          x-wso2-policy-advanced-param: false
+          description: |
+            HTTP status code returned when a request is blocked.
+          default: 400
+          minimum: 400
+          maximum: 599
+        passthroughOnError:
+          type: boolean
+          x-wso2-policy-advanced-param: true
+          description: |
+            When true, allows the request to proceed if the NeMo Guard API
+            call fails (fail-open). When false (default), a 503 is returned
+            on API errors (fail-closed).
+          default: false
+        showAssessment:
+          type: boolean
+          x-wso2-policy-advanced-param: true
+          description: |
+            When true, includes the detected safety category in the
+            blocked-request error response body.
+          default: false
+    response:
+      type: object
+      x-wso2-policy-advanced-param: false
+      description: Configuration for response-phase content safety checks.
+      properties:
+        enabled:
+          type: boolean
+          x-wso2-policy-advanced-param: false
+          description: |
+            Enables content safety checks on upstream responses before they
+            are delivered to the client.
+          default: false
+        jsonPath:
+          type: string
+          x-wso2-policy-advanced-param: false
+          description: |
+            JSONPath expression used to extract the assistant reply from the
+            response body.
+          default: "$.choices[0].message.content"
+        passthroughOnError:
+          type: boolean
+          x-wso2-policy-advanced-param: true
+          description: |
+            When true, allows the response to proceed if the NeMo Guard API
+            call fails (fail-open). When false (default), a 503 is returned
+            on API errors (fail-closed).
+          default: false
+        showAssessment:
+          type: boolean
+          x-wso2-policy-advanced-param: true
+          description: |
+            When true, includes the detected safety category in the
+            replaced-response error body.
+          default: false
+  anyOf:
+    - required: [request]
+    - required: [response]
+
+systemParameters:
+  type: object
+  additionalProperties: false
+  properties:
+    endpoint:
+      type: string
+      format: uri
+      description: |
+        Base URL of the OpenAI-compatible inference endpoint serving the
+        NeMo Guard content safety model
+        (e.g., http://nemoguard:8000). The policy appends
+        /v1/chat/completions automatically.
+      minLength: 1
+      "wso2/defaultValue": "${config.nemoguard_endpoint}"
+    apiKey:
+      type: string
+      description: |
+        Bearer token used to authenticate with the inference endpoint.
+        Leave empty if the endpoint does not require authentication.
+      "wso2/defaultValue": "${config.nemoguard_api_key}"
+    model:
+      type: string
+      description: |
+        Model identifier forwarded in the API request. Override only when
+        the serving endpoint uses a different name for the model.
+      default: "nvidia/llama-3.1-nemoguard-8b-content-safety"
+      "wso2/defaultValue": "${config.nemoguard_model}"
+    timeout:
+      type: integer
+      description: |
+        Per-request timeout in seconds for calls to the NeMo Guard endpoint.
+      default: 10
+      minimum: 1
+      maximum: 60
+      "wso2/defaultValue": "${config.nemoguard_timeout}"
+  required:
+    - endpoint
