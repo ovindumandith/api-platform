@@ -1,4 +1,15 @@
 
+# AI Guardrail model endpoints (RunPod Direct TCP)
+granite_guardian_endpoint = "http://63.141.33.41:22198"
+granite_guardian_api_key  = ""
+granite_guardian_model    = "ibm-granite/granite-guardian-3.3-8b"
+granite_guardian_timeout  = 30
+
+nemoguard_endpoint = "http://63.141.33.41:22197"
+nemoguard_api_key  = ""
+nemoguard_model    = "meta-llama/Llama-Guard-3-8B"
+nemoguard_timeout  = 30
+
 [analytics]
 enabled = true
 allow_payloads = false
@@ -33,26 +44,3 @@ pricing_file = "/etc/policy-engine/llm-pricing/model_prices.json"
 [immutable_gateway]
 enabled = false
 artifacts_dir = "/etc/api-platform-gateway/immutable_gateway/artifacts"
-
-# --------------------------------------------------------------------
-# AI Guardrail model endpoints (RunPod via SSH tunnel)
-#
-# SSH tunnel setup on your laptop (run each in a separate terminal):
-#   ssh -L 8100:localhost:8100 -N root@<runpod-ip> -p <ssh-port>   # Granite Guardian
-#   ssh -L 8101:localhost:8101 -N root@<runpod-ip> -p <ssh-port>   # NeMo Guard
-#
-# The policy engine runs inside the gateway-runtime container, so it
-# reaches your laptop's tunneled ports via host.docker.internal.
-# --------------------------------------------------------------------
-
-[granite_guardian]
-endpoint = "http://host.docker.internal:8100"
-api_key  = ""
-model    = "ibm-granite/granite-guardian-3.3-8b"
-timeout  = 30
-
-[nemoguard]
-endpoint = "http://host.docker.internal:8101"
-api_key  = ""
-model    = "nvidia/llama-3.1-nemoguard-8b-content-safety"
-timeout  = 30

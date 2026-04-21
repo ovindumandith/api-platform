@@ -110,45 +110,60 @@ def _resolve_jsonpath(data: Any, path: str) -> Any:
     return current
 
 
-class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
-    """Validates request and response content with NeMo Guard content safety."""
+def _call_nemoguard(
+    endpoint: str,
+    api_key: str,
+    model: str,
+    timeout: int,
+    messages: list[dict],
+) -> tuple[bool, str | None]:
+    """Call the NeMo Guard endpoint and return (unsafe, category)."""
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 50,
+        "temperature": 0,
+    }
+
+    response = http_client.post(
+        f"{endpoint}/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    raw_verdict: str = data["choices"][0]["message"]["content"].strip()
+    first_line = raw_verdict.splitlines()[0].strip().lower()
+    unsafe = not first_line.startswith("safe")
+
+    category: str | None = None
+    if unsafe and len(raw_verdict.splitlines()) > 1:
+        category = raw_verdict.splitlines()[1].strip()
+
+    return unsafe, category
+
+
+class _NemoGuardBase:
+    """Shared initialisation and helper logic for both policy variants."""
 
     def __init__(self, metadata: PolicyMetadata, params: dict) -> None:
-        # System parameters — fixed at policy attachment time.
         self._endpoint: str = params.get("endpoint", "").rstrip("/")
         self._api_key: str = params.get("apiKey", "")
-        self._model: str = params.get(
-            "model", "nvidia/llama-3.1-nemoguard-8b-content-safety"
-        )
+        self._model: str = params.get("model", "meta-llama/Llama-Guard-3-8B")
         self._timeout: int = int(params.get("timeout", 10))
 
-        # Determine which phases to activate so Envoy only buffers what is needed.
         req_cfg = params.get("request", {}) if isinstance(params.get("request"), dict) else {}
         res_cfg = params.get("response", {}) if isinstance(params.get("response"), dict) else {}
         self._check_request: bool = bool(req_cfg.get("enabled", True))
         self._check_response: bool = bool(res_cfg.get("enabled", False))
 
-    def mode(self) -> ProcessingMode:
-        return ProcessingMode(
-            request_header_mode=HeaderProcessingMode.SKIP,
-            request_body_mode=(
-                BodyProcessingMode.BUFFER
-                if self._check_request
-                else BodyProcessingMode.SKIP
-            ),
-            response_header_mode=HeaderProcessingMode.SKIP,
-            response_body_mode=(
-                BodyProcessingMode.BUFFER
-                if self._check_response
-                else BodyProcessingMode.SKIP
-            ),
-        )
-
-    # ------------------------------------------------------------------
-    # Request phase
-    # ------------------------------------------------------------------
-
-    def on_request_body(
+    def _handle_request_body(
         self,
         execution_ctx: ExecutionContext,
         ctx: RequestContext,
@@ -176,8 +191,9 @@ class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
             return _PASSTHROUGH_REQUEST
 
         try:
-            unsafe, category = self._call_nemoguard(
-                messages=[{"role": "user", "content": user_text}]
+            unsafe, category = _call_nemoguard(
+                self._endpoint, self._api_key, self._model, self._timeout,
+                messages=[{"role": "user", "content": user_text}],
             )
         except Exception as exc:
             logger.warning(
@@ -205,11 +221,7 @@ class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
 
         return _PASSTHROUGH_REQUEST
 
-    # ------------------------------------------------------------------
-    # Response phase
-    # ------------------------------------------------------------------
-
-    def on_response_body(
+    def _handle_response_body(
         self,
         execution_ctx: ExecutionContext,
         ctx: ResponseContext,
@@ -226,14 +238,14 @@ class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
         passthrough_on_error: bool = bool(res_cfg.get("passthroughOnError", False))
         show_assessment: bool = bool(res_cfg.get("showAssessment", False))
 
-        # Reconstruct the conversation so NeMo Guard has full context.
         messages: list[dict] = []
 
-        # Include the original user message when available.
         if ctx.request_body and ctx.request_body.present and ctx.request_body.content:
-            req_json_path: str = params.get("request", {}).get(
-                "jsonPath", "$.messages[-1].content"
-            ) if isinstance(params.get("request"), dict) else "$.messages[-1].content"
+            req_json_path: str = (
+                params.get("request", {}).get("jsonPath", "$.messages[-1].content")
+                if isinstance(params.get("request"), dict)
+                else "$.messages[-1].content"
+            )
             try:
                 req_data = json.loads(ctx.request_body.content)
                 user_text = _resolve_jsonpath(req_data, req_json_path)
@@ -254,7 +266,10 @@ class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
         messages.append({"role": "assistant", "content": assistant_text})
 
         try:
-            unsafe, category = self._call_nemoguard(messages=messages)
+            unsafe, category = _call_nemoguard(
+                self._endpoint, self._api_key, self._model, self._timeout,
+                messages=messages,
+            )
         except Exception as exc:
             logger.warning(
                 "nemoguard response error (request_id=%s): %s",
@@ -273,7 +288,6 @@ class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
             resp_body: dict = {"error": "Response blocked: unsafe content detected"}
             if show_assessment and category:
                 resp_body["assessment"] = {"category": category}
-            # Replace the upstream response rather than propagating it to the client.
             return ImmediateResponse(
                 status_code=200,
                 headers={"content-type": "application/json"},
@@ -282,50 +296,63 @@ class NemoGuardContentSafetyPolicy(RequestPolicy, ResponsePolicy):
 
         return _PASSTHROUGH_RESPONSE
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
-    def _call_nemoguard(self, messages: list[dict]) -> tuple[bool, str | None]:
-        """Call the NeMo Guard endpoint and return (unsafe, category).
+class NemoGuardRequestOnlyPolicy(_NemoGuardBase, RequestPolicy):
+    """Request-phase only variant — used when response.enabled=false."""
 
-        *messages* should contain the conversation turns to evaluate.
-        For request-only checks pass ``[{"role": "user", ...}]``.
-        For response checks pass user + assistant turns so the model has
-        full context.
-        """
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
-
-        payload = {
-            "model": self._model,
-            "messages": messages,
-            "max_tokens": 50,
-            "temperature": 0,
-        }
-
-        response = http_client.post(
-            f"{self._endpoint}/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=self._timeout,
+    def mode(self) -> ProcessingMode:
+        return ProcessingMode(
+            request_header_mode=HeaderProcessingMode.SKIP,
+            request_body_mode=(
+                BodyProcessingMode.BUFFER if self._check_request else BodyProcessingMode.SKIP
+            ),
+            response_header_mode=HeaderProcessingMode.SKIP,
+            response_body_mode=BodyProcessingMode.SKIP,
         )
-        response.raise_for_status()
-        data = response.json()
 
-        raw_verdict: str = data["choices"][0]["message"]["content"].strip()
-        # NeMo Guard responds with "safe" or "unsafe\nS<N>" where S<N> is the
-        # violated safety category.
-        first_line = raw_verdict.splitlines()[0].strip().lower()
-        unsafe = not first_line.startswith("safe")
-
-        category: str | None = None
-        if unsafe and len(raw_verdict.splitlines()) > 1:
-            category = raw_verdict.splitlines()[1].strip()
-
-        return unsafe, category
+    def on_request_body(
+        self,
+        execution_ctx: ExecutionContext,
+        ctx: RequestContext,
+        params: dict,
+    ) -> ImmediateResponse | UpstreamRequestModifications | None:
+        return self._handle_request_body(execution_ctx, ctx, params)
 
 
-def get_policy(metadata: PolicyMetadata, params: dict) -> NemoGuardContentSafetyPolicy:
-    return NemoGuardContentSafetyPolicy(metadata, params)
+class NemoGuardFullPolicy(_NemoGuardBase, RequestPolicy, ResponsePolicy):
+    """Request + response variant — used when response.enabled=true."""
+
+    def mode(self) -> ProcessingMode:
+        return ProcessingMode(
+            request_header_mode=HeaderProcessingMode.SKIP,
+            request_body_mode=(
+                BodyProcessingMode.BUFFER if self._check_request else BodyProcessingMode.SKIP
+            ),
+            response_header_mode=HeaderProcessingMode.SKIP,
+            response_body_mode=BodyProcessingMode.BUFFER,
+        )
+
+    def on_request_body(
+        self,
+        execution_ctx: ExecutionContext,
+        ctx: RequestContext,
+        params: dict,
+    ) -> ImmediateResponse | UpstreamRequestModifications | None:
+        return self._handle_request_body(execution_ctx, ctx, params)
+
+    def on_response_body(
+        self,
+        execution_ctx: ExecutionContext,
+        ctx: ResponseContext,
+        params: dict,
+    ) -> ImmediateResponse | DownstreamResponseModifications | None:
+        return self._handle_response_body(execution_ctx, ctx, params)
+
+
+def get_policy(
+    metadata: PolicyMetadata, params: dict
+) -> NemoGuardRequestOnlyPolicy | NemoGuardFullPolicy:
+    res_cfg = params.get("response", {}) if isinstance(params.get("response"), dict) else {}
+    if bool(res_cfg.get("enabled", False)):
+        return NemoGuardFullPolicy(metadata, params)
+    return NemoGuardRequestOnlyPolicy(metadata, params)

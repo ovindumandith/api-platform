@@ -15,7 +15,6 @@ description: |
 
 parameters:
   type: object
-  additionalProperties: false
   properties:
     request:
       type: object
@@ -122,7 +121,7 @@ systemParameters:
       description: |
         Model identifier forwarded in the API request. Override only when
         the serving endpoint uses a different name for the model.
-      default: "nvidia/llama-3.1-nemoguard-8b-content-safety"
+      default: "meta-llama/Llama-Guard-3-8B"
       "wso2/defaultValue": "${config.nemoguard_model}"
     timeout:
       type: integer

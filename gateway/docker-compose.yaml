@@ -73,8 +73,6 @@ services:
     volumes:
       - ./configs/config.toml:/etc/policy-engine/config.toml:ro
       - ./configs/llm-pricing/model_prices.json:/etc/policy-engine/llm-pricing/model_prices.json:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - gateway-network
 
