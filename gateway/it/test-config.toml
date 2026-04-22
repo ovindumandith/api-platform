@@ -19,6 +19,18 @@ awsbedrock_role_external_id = ""
 azurecontentsafety_endpoint = "http://mock-azure-content-safety:8080"
 azurecontentsafety_key = "test-subscription-key"
 
+# Granite Guardian Prompt Injection Policy Configuration
+granite_guardian_endpoint = "http://mock-granite-guardian:8080"
+granite_guardian_api_key  = ""
+granite_guardian_model    = "ibm-granite/granite-guardian-3.3-8b"
+granite_guardian_timeout  = 30
+
+# NeMo Guard Content Safety Policy Configuration
+nemoguard_endpoint = "http://mock-nemoguard:8080"
+nemoguard_api_key  = ""
+nemoguard_model    = "meta-llama/Llama-Guard-3-8B"
+nemoguard_timeout  = 30
+
 # Embedding Provider Configuration (for semantic-cache and semantic-prompt-guard)
 embedding_provider = "OPENAI"
 embedding_provider_endpoint = "http://mock-embedding-provider:8080/v1/embeddings"

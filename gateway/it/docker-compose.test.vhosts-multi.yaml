@@ -200,6 +200,30 @@ services:
     networks:
       - it-gateway-runtime-network
 
+  # Mock Granite Guardian for prompt injection policy testing
+  mock-granite-guardian:
+    container_name: it-mock-granite-guardian
+    image: ghcr.io/wso2/api-platform/mock-granite-guardian:latest
+    build:
+      context: ../../tests/mock-servers/mock-granite-guardian
+      dockerfile: Dockerfile
+    ports:
+      - "8087:8080"
+    networks:
+      - it-gateway-runtime-network
+
+  # Mock NeMo Guard for content safety policy testing
+  mock-nemoguard:
+    container_name: it-mock-nemoguard
+    image: ghcr.io/wso2/api-platform/mock-nemoguard:latest
+    build:
+      context: ../../tests/mock-servers/mock-nemoguard
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8080"
+    networks:
+      - it-gateway-runtime-network
+
   # Mock Embedding Provider for semantic cache testing
   mock-embedding-provider:
     container_name: it-mock-embedding-provider

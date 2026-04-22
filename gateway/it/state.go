@@ -44,6 +44,8 @@ type Config struct {
 	MockAzureContentSafetyURL  string
 	MockAWSBedrockGuardrailURL string
 	MockEmbeddingProviderURL   string
+	MockGraniteGuardianURL     string
+	MockNemoGuardURL           string
 	MockPlatformAPIURL         string
 	RedisURL                   string
 	HTTPTimeout                time.Duration
@@ -65,6 +67,12 @@ const MockAWSBedrockGuardrailPort = "8083"
 // MockEmbeddingProviderPort is the port for mock-embedding-provider service
 const MockEmbeddingProviderPort = "8085"
 
+// MockGraniteGuardianPort is the port for mock-granite-guardian service
+const MockGraniteGuardianPort = "8087"
+
+// MockNemoGuardPort is the port for mock-nemoguard service
+const MockNemoGuardPort = "8088"
+
 // RedisPort is the port for redis service
 const RedisPort = "6379"
 
@@ -81,6 +89,8 @@ func DefaultConfig() *Config {
 		MockAzureContentSafetyURL:  fmt.Sprintf("http://localhost:%s", MockAzureContentSafetyPort),
 		MockAWSBedrockGuardrailURL: fmt.Sprintf("http://localhost:%s", MockAWSBedrockGuardrailPort),
 		MockEmbeddingProviderURL:   fmt.Sprintf("http://localhost:%s", MockEmbeddingProviderPort),
+		MockGraniteGuardianURL:     fmt.Sprintf("http://localhost:%s", MockGraniteGuardianPort),
+		MockNemoGuardURL:           fmt.Sprintf("http://localhost:%s", MockNemoGuardPort),
 		MockPlatformAPIURL:         fmt.Sprintf("http://localhost:%s", MockPlatformAPIPort),
 		RedisURL:                   fmt.Sprintf("localhost:%s", RedisPort),
 		HTTPTimeout:                10 * time.Second,

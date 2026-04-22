@@ -109,7 +109,7 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
         self._endpoint: str = params.get("endpoint", "").rstrip("/")
         self._api_key: str = params.get("apiKey", "")
         self._model: str = params.get("model", "ibm-granite/granite-guardian-3.3-8b")
-        self._timeout: int = int(params.get("timeout", 10))
+        self._timeout: int = int(params.get("timeout", 60))
 
     def mode(self) -> ProcessingMode:
         return ProcessingMode(
@@ -201,7 +201,7 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
                 },
                 {"role": "user", "content": text},
             ],
-            "max_tokens": 5,
+            "max_tokens": 200,
             "temperature": 0,
         }
 
@@ -215,8 +215,17 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
         data = response.json()
 
         raw_verdict: str = data["choices"][0]["message"]["content"].strip()
-        blocked = raw_verdict.lower().startswith("yes")
-        assessment = {"risk_name": risk_name, "verdict": raw_verdict}
+
+        # Granite Guardian 3.3 wraps the verdict in <score> tags after a
+        # <think> block: "<think>...</think>\n<score> yes </score>"
+        # Extract the score tag content when present, otherwise fall back to
+        # checking the raw text directly (older model versions).
+        import re as _re
+        score_match = _re.search(r"<score>\s*(\w+)\s*</score>", raw_verdict, _re.IGNORECASE)
+        verdict_word = score_match.group(1).lower() if score_match else raw_verdict.lower()
+
+        blocked = verdict_word.startswith("yes")
+        assessment = {"risk_name": risk_name, "verdict": verdict_word}
         return blocked, assessment
 
 

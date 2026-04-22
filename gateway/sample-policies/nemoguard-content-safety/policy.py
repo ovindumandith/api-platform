@@ -156,7 +156,7 @@ class _NemoGuardBase:
         self._endpoint: str = params.get("endpoint", "").rstrip("/")
         self._api_key: str = params.get("apiKey", "")
         self._model: str = params.get("model", "meta-llama/Llama-Guard-3-8B")
-        self._timeout: int = int(params.get("timeout", 10))
+        self._timeout: int = int(params.get("timeout", 60))
 
         req_cfg = params.get("request", {}) if isinstance(params.get("request"), dict) else {}
         res_cfg = params.get("response", {}) if isinstance(params.get("response"), dict) else {}

@@ -111,6 +111,8 @@ func getFeaturePaths() []string {
 		"features/content-length-guardrail.feature",
 		"features/azure-content-safety.feature",
 		"features/aws-bedrock-guardrail.feature",
+		"features/granite-guardian-prompt-injection.feature",
+		"features/nemoguard-content-safety.feature",
 		"features/semantic-cache.feature",
 		"features/semantic-tool-filtering.feature",
 		"features/semantic-prompt-guard.feature",

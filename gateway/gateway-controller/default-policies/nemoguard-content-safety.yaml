@@ -8,10 +8,10 @@ description: |
   Unsafe requests are rejected with a configurable status code; unsafe
   responses are replaced with a sanitised error message.
 
-  NeMo Guard classifies content into eight safety categories:
+  NeMo Guard classifies content into nine safety categories:
     S1 Violence, S2 Sexual content, S3 Criminal planning,
     S4 Guns/Weapons, S5 Regulated substances, S6 Suicide/Self-harm,
-    S7 Hate/Discriminatory, S8 Terrorism.
+    S7 Hate/Discriminatory, S8 Terrorism, S9 Weapons of mass destruction.
 
 parameters:
   type: object
