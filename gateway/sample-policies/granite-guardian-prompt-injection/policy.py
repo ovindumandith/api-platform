@@ -158,17 +158,25 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
                 return ImmediateResponse(
                     status_code=503,
                     headers={"content-type": "application/json"},
-                    body=json.dumps({"error": "Guardrail service unavailable"}).encode(),
+                    body=json.dumps({
+                        "type": "GRANITE_GUARDIAN_PROMPT_INJECTION",
+                        "message": {"action": "SERVICE_UNAVAILABLE", "actionReason": "Guardrail service unavailable."},
+                    }).encode(),
                 )
 
             if blocked:
-                resp_body: dict = {"error": "Request blocked: prompt injection detected"}
+                msg: dict = {
+                    "action": "GUARDRAIL_INTERVENED",
+                    "interveningGuardrail": "Granite Guardian Prompt Injection",
+                    "actionReason": "Prompt injection or jailbreak attempt detected.",
+                    "direction": "REQUEST",
+                }
                 if show_assessment:
-                    resp_body["assessment"] = assessment
+                    msg["assessments"] = {"riskName": risk_name, "verdict": assessment.get("verdict", "")}
                 return ImmediateResponse(
                     status_code=block_status_code,
                     headers={"content-type": "application/json"},
-                    body=json.dumps(resp_body).encode(),
+                    body=json.dumps({"type": "GRANITE_GUARDIAN_PROMPT_INJECTION", "message": msg}).encode(),
                 )
 
         return _PASSTHROUGH

@@ -206,17 +206,25 @@ class _NemoGuardBase:
             return ImmediateResponse(
                 status_code=503,
                 headers={"content-type": "application/json"},
-                body=json.dumps({"error": "Content safety service unavailable"}).encode(),
+                body=json.dumps({
+                    "type": "NEMOGUARD_CONTENT_SAFETY",
+                    "message": {"action": "SERVICE_UNAVAILABLE", "actionReason": "Content safety service unavailable."},
+                }).encode(),
             )
 
         if unsafe:
-            resp_body: dict = {"error": "Request blocked: unsafe content detected"}
+            msg: dict = {
+                "action": "GUARDRAIL_INTERVENED",
+                "interveningGuardrail": "NeMo Guard Content Safety",
+                "actionReason": "Unsafe content detected.",
+                "direction": "REQUEST",
+            }
             if show_assessment and category:
-                resp_body["assessment"] = {"category": category}
+                msg["assessments"] = {"category": category}
             return ImmediateResponse(
                 status_code=block_status_code,
                 headers={"content-type": "application/json"},
-                body=json.dumps(resp_body).encode(),
+                body=json.dumps({"type": "NEMOGUARD_CONTENT_SAFETY", "message": msg}).encode(),
             )
 
         return _PASSTHROUGH_REQUEST
@@ -281,17 +289,25 @@ class _NemoGuardBase:
             return ImmediateResponse(
                 status_code=503,
                 headers={"content-type": "application/json"},
-                body=json.dumps({"error": "Content safety service unavailable"}).encode(),
+                body=json.dumps({
+                    "type": "NEMOGUARD_CONTENT_SAFETY",
+                    "message": {"action": "SERVICE_UNAVAILABLE", "actionReason": "Content safety service unavailable."},
+                }).encode(),
             )
 
         if unsafe:
-            resp_body: dict = {"error": "Response blocked: unsafe content detected"}
+            msg: dict = {
+                "action": "GUARDRAIL_INTERVENED",
+                "interveningGuardrail": "NeMo Guard Content Safety",
+                "actionReason": "Unsafe content detected.",
+                "direction": "RESPONSE",
+            }
             if show_assessment and category:
-                resp_body["assessment"] = {"category": category}
+                msg["assessments"] = {"category": category}
             return ImmediateResponse(
                 status_code=200,
                 headers={"content-type": "application/json"},
-                body=json.dumps(resp_body).encode(),
+                body=json.dumps({"type": "NEMOGUARD_CONTENT_SAFETY", "message": msg}).encode(),
             )
 
         return _PASSTHROUGH_RESPONSE
