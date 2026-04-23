@@ -1,0 +1,100 @@
+# --------------------------------------------------------------------
+# Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+#
+# WSO2 LLC. licenses this file to you under the Apache License,
+# Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+# --------------------------------------------------------------------
+
+# RunPod all-in-one overlay — runs the full gateway stack alongside both
+# AI guardrail model servers on a single GPU pod (A40 recommended: 48 GB VRAM).
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.runpod.yaml up -d
+#
+# Required environment variables (set in .env.runpod):
+#   HF_TOKEN   — Hugging Face token with access to gated models
+#
+# Models are cached in a named volume so they survive container restarts.
+# First startup downloads ~16 GB of weights; subsequent starts are instant.
+
+services:
+  vllm-granite-guardian:
+    image: vllm/vllm-openai:latest
+    container_name: runpod-vllm-granite-guardian
+    runtime: nvidia
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+    command:
+      - "--model"
+      - "ibm-granite/granite-guardian-3.3-8b"
+      - "--port"
+      - "8001"
+      - "--dtype"
+      - "bfloat16"
+      - "--max-model-len"
+      - "4096"
+    volumes:
+      - hf-model-cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    networks:
+      - gateway-network
+
+  vllm-nemoguard:
+    image: vllm/vllm-openai:latest
+    container_name: runpod-vllm-nemoguard
+    runtime: nvidia
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+    command:
+      - "--model"
+      - "meta-llama/Llama-Guard-3-8B"
+      - "--port"
+      - "8002"
+      - "--dtype"
+      - "bfloat16"
+      - "--max-model-len"
+      - "4096"
+    volumes:
+      - hf-model-cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    networks:
+      - gateway-network
+
+  # Override gateway-runtime to point at the local vLLM services and load
+  # RunPod-specific env vars.
+  gateway-runtime:
+    env_file:
+      - path: .env.runpod
+        required: false
+    depends_on:
+      vllm-granite-guardian:
+        condition: service_healthy
+      vllm-nemoguard:
+        condition: service_healthy
+
+volumes:
+  hf-model-cache:
+    driver: local
