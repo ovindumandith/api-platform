@@ -41,6 +41,19 @@ parameters:
       default: 400
       minimum: 400
       maximum: 599
+    threshold:
+      type: number
+      x-wso2-policy-advanced-param: false
+      description: |
+        Minimum model confidence (0.0–1.0) required to block a request.
+        Granite Guardian returns a log-probability for its verdict token;
+        this is converted to a probability and compared against the threshold.
+        Increase the value to reduce false positives — a request is only
+        blocked when the model's confidence meets or exceeds this level.
+        Set to 0.0 to block on any positive verdict regardless of confidence.
+      default: 0.5
+      minimum: 0.0
+      maximum: 1.0
     passthroughOnError:
       type: boolean
       x-wso2-policy-advanced-param: true

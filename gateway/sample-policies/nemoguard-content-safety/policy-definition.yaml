@@ -43,6 +43,60 @@ parameters:
           default: 400
           minimum: 400
           maximum: 599
+        categories:
+          type: object
+          x-wso2-policy-advanced-param: false
+          description: |
+            Toggle individual safety categories. Each enabled category
+            (true) will block the request when detected. Disabled categories
+            (false) are passed through even if NeMo Guard flags them.
+            All categories are blocked by default when this object is omitted.
+          properties:
+            violence:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S1 — Block violent content."
+              default: true
+            sexual_content:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S2 — Block sexual content."
+              default: true
+            criminal_planning:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S3 — Block criminal planning content."
+              default: true
+            guns_weapons:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S4 — Block guns and weapons content."
+              default: true
+            regulated_substances:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S5 — Block regulated substances content."
+              default: true
+            suicide_self_harm:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S6 — Block suicide and self-harm content."
+              default: true
+            hate_discriminatory:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S7 — Block hate and discriminatory content."
+              default: true
+            terrorism:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S8 — Block terrorism-related content."
+              default: true
+            weapons_of_mass_destruction:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S9 — Block weapons of mass destruction content."
+              default: true
         passthroughOnError:
           type: boolean
           x-wso2-policy-advanced-param: true
@@ -77,6 +131,58 @@ parameters:
             JSONPath expression used to extract the assistant reply from the
             response body.
           default: "$.choices[0].message.content"
+        categories:
+          type: object
+          x-wso2-policy-advanced-param: false
+          description: |
+            Toggle individual safety categories for response-phase checks.
+            Same semantics as the request-phase categories object.
+          properties:
+            violence:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S1 — Block violent content."
+              default: true
+            sexual_content:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S2 — Block sexual content."
+              default: true
+            criminal_planning:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S3 — Block criminal planning content."
+              default: true
+            guns_weapons:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S4 — Block guns and weapons content."
+              default: true
+            regulated_substances:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S5 — Block regulated substances content."
+              default: true
+            suicide_self_harm:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S6 — Block suicide and self-harm content."
+              default: true
+            hate_discriminatory:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S7 — Block hate and discriminatory content."
+              default: true
+            terrorism:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S8 — Block terrorism-related content."
+              default: true
+            weapons_of_mass_destruction:
+              type: boolean
+              x-wso2-policy-advanced-param: false
+              description: "S9 — Block weapons of mass destruction content."
+              default: true
         passthroughOnError:
           type: boolean
           x-wso2-policy-advanced-param: true

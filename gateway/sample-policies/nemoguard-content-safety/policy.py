@@ -55,6 +55,34 @@ logger = logging.getLogger(__name__)
 _PASSTHROUGH_REQUEST: UpstreamRequestModifications | None = None
 _PASSTHROUGH_RESPONSE: DownstreamResponseModifications | None = None
 
+# Maps policy-param key → NeMo Guard category code returned by the model.
+_CATEGORY_CODES: dict[str, str] = {
+    "violence": "S1",
+    "sexual_content": "S2",
+    "criminal_planning": "S3",
+    "guns_weapons": "S4",
+    "regulated_substances": "S5",
+    "suicide_self_harm": "S6",
+    "hate_discriminatory": "S7",
+    "terrorism": "S8",
+    "weapons_of_mass_destruction": "S9",
+}
+
+
+def _blocked_codes(categories_cfg: dict) -> frozenset[str] | None:
+    """Return the set of category codes to block, or None to block all.
+
+    None means no categories object was configured → preserve original
+    behaviour (block everything NeMo flags as unsafe).
+    """
+    if not isinstance(categories_cfg, dict) or not categories_cfg:
+        return None
+    return frozenset(
+        code
+        for key, code in _CATEGORY_CODES.items()
+        if bool(categories_cfg.get(key, True))
+    )
+
 
 def _resolve_jsonpath(data: Any, path: str) -> Any:
     """Resolve a simple dotted JSONPath expression against *data*.
@@ -180,6 +208,7 @@ class _NemoGuardBase:
         passthrough_on_error: bool = bool(req_cfg.get("passthroughOnError", False))
         show_assessment: bool = bool(req_cfg.get("showAssessment", False))
         block_status_code: int = int(req_cfg.get("blockStatusCode", 400))
+        blocked_codes = _blocked_codes(req_cfg.get("categories", {}))
 
         try:
             body_data = json.loads(ctx.body.content)
@@ -213,6 +242,9 @@ class _NemoGuardBase:
             )
 
         if unsafe:
+            cat_code = category.split()[0].upper() if category else None
+            if blocked_codes is not None and cat_code not in blocked_codes:
+                return _PASSTHROUGH_REQUEST
             msg: dict = {
                 "action": "GUARDRAIL_INTERVENED",
                 "interveningGuardrail": "NeMo Guard Content Safety",
@@ -245,6 +277,7 @@ class _NemoGuardBase:
         json_path: str = res_cfg.get("jsonPath", "$.choices[0].message.content")
         passthrough_on_error: bool = bool(res_cfg.get("passthroughOnError", False))
         show_assessment: bool = bool(res_cfg.get("showAssessment", False))
+        blocked_codes = _blocked_codes(res_cfg.get("categories", {}))
 
         messages: list[dict] = []
 
@@ -296,6 +329,9 @@ class _NemoGuardBase:
             )
 
         if unsafe:
+            cat_code = category.split()[0].upper() if category else None
+            if blocked_codes is not None and cat_code not in blocked_codes:
+                return _PASSTHROUGH_RESPONSE
             msg: dict = {
                 "action": "GUARDRAIL_INTERVENED",
                 "interveningGuardrail": "NeMo Guard Content Safety",

@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import re as _re
 from typing import Any
 
 import requests as http_client
@@ -45,6 +47,22 @@ logger = logging.getLogger(__name__)
 _DEFAULT_RISKS: list[str] = ["jailbreak", "prompt_injection"]
 
 _PASSTHROUGH: UpstreamRequestModifications | None = None
+
+
+def _verdict_confidence(logprobs_content: list, verdict_word: str) -> float | None:
+    """Return exp(logprob) of the verdict token, searching backwards through the sequence.
+
+    vLLM returns per-token logprobs; the verdict ("yes"/"no") appears near
+    the end of the generation (inside the <score> tag). Searching in reverse
+    finds it without needing to track character offsets.
+    """
+    target = verdict_word.strip().lower()
+    for token_data in reversed(logprobs_content):
+        if token_data.get("token", "").strip().lower() == target:
+            lp = token_data.get("logprob")
+            if lp is not None:
+                return math.exp(lp)
+    return None
 
 
 def _resolve_jsonpath(data: Any, path: str) -> Any:
@@ -132,6 +150,7 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
         passthrough_on_error: bool = bool(params.get("passthroughOnError", False))
         show_assessment: bool = bool(params.get("showAssessment", False))
         block_status_code: int = int(params.get("blockStatusCode", 400))
+        threshold: float = float(params.get("threshold", 0.5))
         risk_names: list[str] = params.get("riskNames", _DEFAULT_RISKS)
 
         try:
@@ -145,7 +164,7 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
 
         for risk_name in risk_names:
             try:
-                blocked, assessment = self._call_guardian(text, risk_name)
+                blocked, assessment = self._call_guardian(text, risk_name, threshold)
             except Exception as exc:
                 logger.warning(
                     "granite-guardian error (risk=%s, request_id=%s): %s",
@@ -181,7 +200,7 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
 
         return _PASSTHROUGH
 
-    def _call_guardian(self, text: str, risk_name: str) -> tuple[bool, dict]:
+    def _call_guardian(self, text: str, risk_name: str, threshold: float) -> tuple[bool, dict]:
         """Call the Granite Guardian endpoint and return (blocked, assessment)."""
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if self._api_key:
@@ -203,6 +222,8 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
             ],
             "max_tokens": 200,
             "temperature": 0,
+            "logprobs": True,
+            "top_logprobs": 5,
         }
 
         response = http_client.post(
@@ -220,12 +241,25 @@ class GraniteGuardianPromptInjectionPolicy(RequestPolicy):
         # <think> block: "<think>...</think>\n<score> yes </score>"
         # Extract the score tag content when present, otherwise fall back to
         # checking the raw text directly (older model versions).
-        import re as _re
         score_match = _re.search(r"<score>\s*(\w+)\s*</score>", raw_verdict, _re.IGNORECASE)
         verdict_word = score_match.group(1).lower() if score_match else raw_verdict.lower()
 
         blocked = verdict_word.startswith("yes")
-        assessment = {"risk_name": risk_name, "verdict": verdict_word}
+        confidence: float | None = None
+
+        if blocked and threshold > 0.0:
+            logprobs_content = (
+                data["choices"][0]
+                .get("logprobs", {})
+                .get("content", [])
+            )
+            confidence = _verdict_confidence(logprobs_content, verdict_word.split()[0])
+            if confidence is not None and confidence < threshold:
+                blocked = False
+
+        assessment: dict = {"risk_name": risk_name, "verdict": verdict_word}
+        if confidence is not None:
+            assessment["confidence"] = round(confidence, 4)
         return blocked, assessment
 
 
