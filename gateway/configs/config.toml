@@ -1,11 +1,11 @@
 
 # AI Guardrail model endpoints (RunPod Direct TCP)
-granite_guardian_endpoint = "http://69.30.85.231:22149"
+granite_guardian_endpoint = "http://69.30.85.104:22072"
 granite_guardian_api_key  = ""
 granite_guardian_model    = "ibm-granite/granite-guardian-3.3-8b"
 granite_guardian_timeout  = 30
 
-nemoguard_endpoint = "http://69.30.85.231:22150"
+nemoguard_endpoint = "http://69.30.85.19:22153"
 nemoguard_api_key  = ""
 nemoguard_model    = "meta-llama/Llama-Guard-3-8B"
 nemoguard_timeout  = 30
